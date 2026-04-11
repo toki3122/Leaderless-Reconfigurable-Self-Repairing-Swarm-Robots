@@ -255,6 +255,8 @@ void loop() {
   Serial.print(" Stuck: ");      Serial.print(stuck);
   Serial.print(" | X: ");        Serial.print(posX, 2);
   Serial.print(" Y: ");          Serial.print(posY, 2);
+  Serial.print(" VX: ");        Serial.print(velX, 2);
+  Serial.print(" VY: ");        Serial.print(velY, 2);
   Serial.print(" Hdg: ");        Serial.print(heading, 1);
   Serial.print(" SOS: ");        Serial.print(sosFlag ? "YES" : "no");
   if (sosFlag) {
