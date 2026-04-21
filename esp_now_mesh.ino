@@ -34,10 +34,6 @@ uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 const uint8_t THIS_BOT_ID = 0; //change for every bot *****very important*****
 
-// ═══════════════════════════════════════════════════════════════════════════
-// [IMU] — SENSOR STATE VARIABLES
-// ═══════════════════════════════════════════════════════════════════════════
-
 float AccX, AccY, AccZ;
 float RateRoll, RatePitch, RateYaw;
 float AngleRoll  = 0;
@@ -133,9 +129,8 @@ void updateHeading(float dt) {
   if (heading < 0)   heading += 360;
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════
-// [IMU] — DEAD RECKONING POSITION
+// DEAD RECKONING POSITION
 // ═══════════════════════════════════════════════════════════════════════════
 
 void updatePosition(float dt) {
@@ -169,16 +164,12 @@ void updatePosition(float dt) {
   posX += velX * dt;
   posY += velY * dt;
 }
-
-//tilt threshold hysteresis down to 15°
 // stuck check skipped when wanderActive==false
 void updateSOS() {
   unsigned long now = millis();
 
-  // ── SOS is active: only try to clear, never re-raise ──────────────────
+  // ── SOS is active
   if (myData.sosFlag) {
-    // isCalm excludes stuck — bot is stopped because of SOS so it will
-    // always look motionless. checking stuck here would block clearing
     bool isCalm = (!unstable && !roughTerrain);
 
     if (isCalm) {
@@ -191,12 +182,10 @@ void updateSOS() {
         Serial.println("SOS cleared");
       }
     } else {
-      flatTimer = 0;  // rough again — restart calm timer
+      flatTimer = 0;  //restarted calm timer
     }
     return;
   }
-
-  // ── SOS is clear: check raise conditions ──────────────────────────────
 
   if (unstable) {
     myData.sosFlag = true;
@@ -213,7 +202,7 @@ void updateSOS() {
     flatTimer      = 0;
     return;
   }
-  // only count stuck when wander is active — stopped motors always look stuck
+  // only count stuck when wander is active
   if (stuck && wanderActive) {
     if (stuckTimer == 0) stuckTimer = now;
     if ((now - stuckTimer) > STUCK_TIME_MS) {
@@ -262,7 +251,7 @@ void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — FIND NEAREST SOS BOT
+// finding nearest bot
 // ═══════════════════════════════════════════════════════════════════════════
 
 int findNearestSOSBot() {
@@ -278,12 +267,9 @@ int findNearestSOSBot() {
   }
   return nearestID;
 }
-
-
 // ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — BROADCAST OWN STATE
+//own state broadcasting
 // ═══════════════════════════════════════════════════════════════════════════
-
 void broadcastState() {
   esp_err_t result = esp_now_send(
     broadcastAddress,
@@ -294,12 +280,9 @@ void broadcastState() {
     Serial.println("Broadcast failed");
   }
 }
-
-
 // ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — LÉVY STEP SIZE GENERATOR
+// LÉVY STEP SIZE GENERATOR
 // ═══════════════════════════════════════════════════════════════════════════
-
 float levySample() {
   float u = (float)random(1, 10000) / 10000.0;
   return pow(u, -1.0 / LEVY_ALPHA);
@@ -326,12 +309,9 @@ void applyMovement() {
     case MOVE_BACKWARD: driveBackward(); break;
   }
 }
-
-
 // ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — NEXT MOVE PICKER
+// NEXT MOVE PICKER
 // ═══════════════════════════════════════════════════════════════════════════
-
 void pickNextMove() {
   int r = random(0, 100);
   if      (r < 55) { currentMove = MOVE_FORWARD;  moveDuration = levyStepDuration(); }
@@ -356,11 +336,9 @@ void pickNextMove() {
   Serial.println("ms");
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — WANDER PAUSE / RESUME
+// WANDER PAUSE / RESUME
 // ═══════════════════════════════════════════════════════════════════════════
-
 void pauseWander() {
   wanderActive = false;
   stopMotors();
@@ -372,7 +350,6 @@ void resumeWander() {
   pickNextMove();
   Serial.println("Wander resumed");
 }
-
 void setup() {
   Serial.begin(115200);
   Wire.begin();
@@ -392,7 +369,6 @@ void setup() {
   GyroCalRoll  /= 4000;
   GyroCalPitch /= 4000;
   GyroCalYaw   /= 4000;
-
   //warm up sensor 
   for (int i = 0; i < 10; i++) { imu_read(); delay(20); }
   prevAccX    = AccX;
@@ -413,7 +389,6 @@ void setup() {
     Serial.println("ESP-NOW init failed — restarting");
     ESP.restart();
   }
-
   esp_now_register_recv_cb(onDataReceiveFull);
   esp_now_register_send_cb(onDataSent);
 
@@ -438,8 +413,7 @@ void setup() {
   myData.roll           = 0;
   myData.mergePartnerID = 255;
   Serial.println("ESP-NOW mesh ready");
-
-  // ── [LEVY] — attach servos and start first move ───────────────────────
+  
   leftServo.attach(LEFT_SERVO_PIN);
   rightServo.attach(RIGHT_SERVO_PIN);
   stopMotors();
@@ -456,7 +430,7 @@ void loop() {
   float dt = (currentTime - prevTime) / 1000.0;
   prevTime = currentTime;
 
-  // ── [IMU] — complementary filter ─────────────────────────────────────
+  //complementary filter ─────────────────────────────────────
   AngleRollAcc  = atan2(AccY, sqrt(AccX * AccX + AccZ * AccZ)) * 57.2958;
   AnglePitchAcc = atan2(-AccX, sqrt(AccY * AccY + AccZ * AccZ)) * 57.2958;
   float tau   = 0.3;
@@ -471,8 +445,6 @@ void loop() {
     stuck        = false;
   } else {
 
-    // hysteresis on unstable — raises at 20°, only clears below 15°
-    // prevents flickering when resting near the threshold
     if (!unstable) {
       unstable = abs(AngleRoll) > TILT_RAISE || abs(AnglePitch) > TILT_RAISE;
     } else {
@@ -486,7 +458,7 @@ void loop() {
 
     roughTerrain = (jerkX + jerkY + jerkZ) > JERK_THRESH;
 
-    // stuck: only when wander is active — stopped motors always look stuck
+    // stuck: only when wander is active
     static unsigned long lowMotionTimer = 0;
     float motionMag = abs(AccX) + abs(AccY);
     bool  lowMotion = motionMag < MOTION_THRESH;
@@ -516,7 +488,6 @@ void loop() {
     lastBroadcast = millis();
   }
 
-  // ── [ESPNOW + LEVY] — SOS and wander control ─────────────────────────
   if (millis() - lastCheck > DIRECTION_CHECK_MS) {
     lastCheck = millis();
 
@@ -527,11 +498,9 @@ void loop() {
       Serial.println(sosReason);
     }
 
-    // resume only after SOS fully clears — flatTimer==0 confirms clean clear
     if (!myData.sosFlag && !wanderActive && !myData.mergeStatus && flatTimer == 0) {
       resumeWander();
     }
-
     // check if any swarm bot needs help
     int nearestSOS = findNearestSOSBot();
     if (nearestSOS != -1 && !myData.mergeStatus && !myData.sosFlag) {
