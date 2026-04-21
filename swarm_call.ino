@@ -9,9 +9,6 @@
 // which reset the ESP32 mid-operation
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — SHARED DATA STRUCT
-// ═══════════════════════════════════════════════════════════════════════════
 typedef struct BotData {
   uint8_t  botID;
   float    posX;
@@ -24,9 +21,6 @@ typedef struct BotData {
   float    roll;
   uint8_t  mergePartnerID;
 } BotData;
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — SWARM STATE STORAGE
-// ═══════════════════════════════════════════════════════════════════════════
 
 BotData myData;
 BotData swarm[3];
@@ -68,11 +62,6 @@ String        sosReason  = "";
 unsigned long stuckTimer = 0;
 unsigned long flatTimer  = 0;
 
-// ── [IMU] — tuned thresholds ──────────────────────────────────────────────
-// JERK_THRESH raised from 0.25 to 0.8 — servo current spikes on shared
-// power rail were causing fake roughTerrain triggers
-// MOTION_THRESH raised from 0.095 to 0.3 — shared rail noise kept
-// stuck detection permanently firing during movement
 const float   TILT_RAISE          = 20.0;
 const float   TILT_CLEAR          = 15.0;
 const float   JERK_THRESH         = 0.8;
@@ -111,17 +100,11 @@ bool          wanderActive = true;
 unsigned long lastBroadcast = 0;
 unsigned long lastCheck     = 0;
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [NAV] — SIMPLE RSSI NAVIGATOR
-// ═══════════════════════════════════════════════════════════════════════════
-
 const float ARRIVAL_RSSI    = -50.0;
 const int   SCAN_TURN_MS    = 300;
 const int   SCAN_INTERVAL   = 2000;
 const int   SCAN_TURN_SPEED = 10;
 
-// ── [NAV] — RSSI smoothing buffer ────────────────────────────────────────
 int rssiHistory[3][5] = {{-100},{-100},{-100}};
 int rssiIndex[3]      = {0, 0, 0};
 
@@ -279,11 +262,6 @@ void updateHeading(float dt) {
   if (heading < 0)   heading += 360;
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [IMU] — DEAD RECKONING POSITION
-// ═══════════════════════════════════════════════════════════════════════════
-
 void updatePosition(float dt) {
   if (dt <= 0 || dt > 0.5) return;
 
@@ -315,11 +293,6 @@ void updatePosition(float dt) {
   posX += velX * dt;
   posY += velY * dt;
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [IMU] — SOS DETECTION — FIXED V3
-// ═══════════════════════════════════════════════════════════════════════════
 
 void updateSOS() {
   unsigned long now = millis();
@@ -371,11 +344,6 @@ void updateSOS() {
   }
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [IMU] — POSITION RESET
-// ═══════════════════════════════════════════════════════════════════════════
-
 void resetPosition(float knownX, float knownY) {
   posX = knownX;
   posY = knownY;
@@ -383,11 +351,6 @@ void resetPosition(float knownX, float knownY) {
   velY = 0;
   Serial.println("Position reset");
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — RECEIVE CALLBACK
-// ═══════════════════════════════════════════════════════════════════════════
 
 void onDataReceiveFull(const esp_now_recv_info_t *info,
                        const uint8_t *data, int len) {
@@ -409,21 +372,10 @@ void onDataReceiveFull(const esp_now_recv_info_t *info,
   }
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — SEND CALLBACK
-// Updated signature for ESP32 Arduino core v3.x
-// ═══════════════════════════════════════════════════════════════════════════
-
 void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
   Serial.print("Send status: ");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAIL");
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — FIND NEAREST SOS BOT
-// ═══════════════════════════════════════════════════════════════════════════
 
 int findNearestSOSBot() {
   int bestRSSI  = -100;
@@ -439,11 +391,6 @@ int findNearestSOSBot() {
   return nearestID;
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [ESPNOW] — BROADCAST OWN STATE
-// ═══════════════════════════════════════════════════════════════════════════
-
 void broadcastState() {
   esp_err_t result = esp_now_send(
     broadcastAddress,
@@ -454,11 +401,6 @@ void broadcastState() {
     Serial.println("Broadcast failed");
   }
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — LÉVY STEP SIZE GENERATOR
-// ═══════════════════════════════════════════════════════════════════════════
 
 float levySample() {
   float u = (float)random(1, 10000) / 10000.0;
@@ -471,11 +413,6 @@ unsigned long levyStepDuration() {
   normalized       = constrain(normalized, 0.0, 1.0);
   return MIN_MOVE_MS + (unsigned long)(normalized * (MAX_MOVE_MS - MIN_MOVE_MS));
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — SERVO DRIVE PRIMITIVES
-// ═══════════════════════════════════════════════════════════════════════════
 
 void driveForward()  { leftServo.write(FULL_FWD);          rightServo.write(FULL_REV); }
 void driveBackward() { leftServo.write(FULL_REV);          rightServo.write(FULL_FWD); }
@@ -491,11 +428,6 @@ void applyMovement() {
     case MOVE_BACKWARD: driveBackward(); break;
   }
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — NEXT MOVE PICKER
-// ═══════════════════════════════════════════════════════════════════════════
 
 void pickNextMove() {
   int r = random(0, 100);
@@ -521,11 +453,6 @@ void pickNextMove() {
   Serial.println("ms");
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// [LEVY] — WANDER PAUSE / RESUME
-// ═══════════════════════════════════════════════════════════════════════════
-
 void pauseWander() {
   wanderActive = false;
   stopMotors();
@@ -539,10 +466,6 @@ void resumeWander() {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SETUP
-// ═══════════════════════════════════════════════════════════════════════════
-
 void setup() {
 
   // ── disable brownout detector ─────────────────────────────────────────
@@ -552,7 +475,6 @@ void setup() {
 
   Serial.begin(115200);
 
-  // ── [IMU] — start I2C and wake up MPU-6050 ────────────────────────────
   Wire.begin();
   Wire.setClock(400000);
   Wire.beginTransmission(0x68);
@@ -561,7 +483,6 @@ void setup() {
   Wire.endTransmission();
   delay(200);
 
-  // ── [IMU] — gyro calibration: average 4000 samples at rest ───────────
   for (int i = 0; i < 4000; i++) {
     imu_read();
     GyroCalRoll  += RateRoll;
@@ -573,7 +494,6 @@ void setup() {
   GyroCalPitch /= 4000;
   GyroCalYaw   /= 4000;
 
-  // ── [IMU] — warm up sensor ────────────────────────────────────────────
   for (int i = 0; i < 10; i++) { imu_read(); delay(20); }
   prevAccX    = AccX;
   prevAccY    = AccY;
@@ -582,7 +502,6 @@ void setup() {
   prevTime    = millis();
   Serial.println("IMU ready — calibration done");
 
-  // ── [ESPNOW] — WiFi STA mode required for ESP-NOW ────────────────────
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   Serial.print("Bot ");
@@ -598,7 +517,6 @@ void setup() {
   esp_now_register_recv_cb(onDataReceiveFull);
   esp_now_register_send_cb(onDataSent);
 
-  // ── [ESPNOW] — add broadcast peer ────────────────────────────────────
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
   peerInfo.channel = 0;
@@ -607,7 +525,6 @@ void setup() {
     Serial.println("Failed to add broadcast peer");
   }
 
-  // ── [ESPNOW] — initialise own data struct ────────────────────────────
   myData.botID          = THIS_BOT_ID;
   myData.posX           = 0;
   myData.posY           = 0;
@@ -620,7 +537,6 @@ void setup() {
   myData.mergePartnerID = 255;
   Serial.println("ESP-NOW mesh ready");
 
-  // ── [LEVY] — attach servos and start first move ───────────────────────
   leftServo.attach(LEFT_SERVO_PIN);
   rightServo.attach(RIGHT_SERVO_PIN);
   stopMotors();
@@ -630,21 +546,14 @@ void setup() {
   Serial.println("Lévy walk ready");
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MAIN LOOP
-// ═══════════════════════════════════════════════════════════════════════════
-
 void loop() {
 
-  // ── [IMU] — read raw sensor ───────────────────────────────────────────
   imu_read();
-
   unsigned long currentTime = millis();
   float dt = (currentTime - prevTime) / 1000.0;
   prevTime = currentTime;
 
-  // ── [IMU] — complementary filter ─────────────────────────────────────
+  //complementary filter 
   AngleRollAcc  = atan2(AccY, sqrt(AccX * AccX + AccZ * AccZ)) * 57.2958;
   AnglePitchAcc = atan2(-AccX, sqrt(AccY * AccY + AccZ * AccZ)) * 57.2958;
   float tau   = 0.3;
@@ -652,7 +561,6 @@ void loop() {
   AngleRoll  = alpha * (AngleRoll  + RateRoll  * dt) + (1 - alpha) * AngleRollAcc;
   AnglePitch = alpha * (AnglePitch + RatePitch * dt) + (1 - alpha) * AnglePitchAcc;
 
-  // ── [IMU] — terrain flags ─────────────────────────────────────────────
   if (!warmedUp) {
     // raised to 3000ms — battery-powered IMU needs longer to settle
     warmedUp     = (millis() - warmupStart) > WARMUP_MS;
@@ -660,8 +568,6 @@ void loop() {
     roughTerrain = false;
     stuck        = false;
   } else {
-
-    // hysteresis on unstable — raises at 20°, only clears below 15°
     if (!unstable) {
       unstable = abs(AngleRoll) > TILT_RAISE || abs(AnglePitch) > TILT_RAISE;
     } else {
@@ -674,17 +580,13 @@ void loop() {
     prevAccX = AccX; prevAccY = AccY; prevAccZ = AccZ;
     roughTerrain = (jerkX + jerkY + jerkZ) > JERK_THRESH;
 
-    // ── [IMU] — stuck detection ───────────────────────────────────────
-    // stuckArmed prevents startup stillness from counting as stuck
-    // lowMotionTimer reset when warmedUp first becomes true
     static unsigned long lowMotionTimer = 0;
-    static bool          stuckArmed     = false;
+    static bool stuckArmed = false;
 
     if (!stuckArmed && warmedUp) {
       lowMotionTimer = 0;
-      stuckArmed     = true;
+      stuckArmed = true;
     }
-
     float motionMag = abs(AccX) + abs(AccY);
     bool  lowMotion = motionMag < MOTION_THRESH;
 
@@ -696,13 +598,10 @@ void loop() {
       stuck          = false;
     }
   }
-
-  // ── [IMU] — heading, position, SOS ───────────────────────────────────
   updateHeading(dt);
   updatePosition(dt);
   updateSOS();
 
-  // ── [ESPNOW] — push live IMU values into broadcast struct ────────────
   myData.posX     = posX;
   myData.posY     = posY;
   myData.velocity = sqrt(velX * velX + velY * velY);
@@ -710,29 +609,24 @@ void loop() {
   myData.roll     = AngleRoll;
   // myData.battery = batteryPercent();
 
-  // ── [ESPNOW] — broadcast every 200ms ─────────────────────────────────
   if (millis() - lastBroadcast > 200) {
     broadcastState();
     lastBroadcast = millis();
   }
 
-  // ── [ESPNOW + LEVY + NAV] — SOS response and wander control ──────────
   if (millis() - lastCheck > DIRECTION_CHECK_MS) {
     lastCheck = millis();
 
-    // pause wander the moment this bot raises SOS
     if (myData.sosFlag && wanderActive) {
       pauseWander();
       Serial.print("SOS active: ");
       Serial.println(sosReason);
     }
 
-    // resume wander only after SOS fully clears
     if (!myData.sosFlag && !wanderActive && !myData.mergeStatus && flatTimer == 0) {
       resumeWander();
     }
 
-    // if another bot has SOS and this bot is free — navigate toward it
     int nearestSOS = findNearestSOSBot();
     if (nearestSOS != -1 && !myData.mergeStatus && !myData.sosFlag) {
       if (wanderActive) pauseWander();
@@ -754,14 +648,12 @@ void loop() {
     }
   }
 
-  // ── [LEVY] — run Lévy walk if wander is active ───────────────────────
   if (wanderActive) {
     if (millis() - moveStart >= moveDuration) {
       pickNextMove();
     }
   }
 
-  // ── [ESPNOW] — debug: swarm state ────────────────────────────────────
   for (int i = 0; i < 3; i++) {
     if (!peerSeen[i]) continue;
     Serial.print("Bot");    Serial.print(swarm[i].botID);
@@ -772,7 +664,6 @@ void loop() {
     Serial.print(" Mrg:");  Serial.println(swarm[i].mergeStatus ? "YES" : "no");
   }
 
-  // ── [IMU] — debug: own sensor state ──────────────────────────────────
   Serial.print("Roll: ");   Serial.print(AngleRoll);
   Serial.print(" Pitch: "); Serial.print(AnglePitch);
   Serial.print(" Temp: ");  Serial.print(TempC); Serial.print("C");
